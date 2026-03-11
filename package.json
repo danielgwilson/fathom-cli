@@ -1,0 +1,63 @@
+{
+  "name": "fathom-video-cli",
+  "version": "0.1.0",
+  "description": "Agent-first CLI + skill for Fathom's official API",
+  "license": "MIT",
+  "author": "Daniel G Wilson",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/danielgwilson/fathom-cli.git"
+  },
+  "homepage": "https://github.com/danielgwilson/fathom-cli#readme",
+  "bugs": {
+    "url": "https://github.com/danielgwilson/fathom-cli/issues"
+  },
+  "bin": {
+    "fathom": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "fathom",
+    "fathom-ai",
+    "meetings",
+    "transcript",
+    "summary",
+    "cli",
+    "agent-first"
+  ],
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.build.json && node -e \"require('node:fs').chmodSync('dist/cli.js',0o755)\"",
+    "dev": "tsx src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "npm run typecheck",
+    "pretest": "npm run build",
+    "test": "tsx --test",
+    "start": "node dist/cli.js",
+    "prepublishOnly": "npm test",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "yazl": "^3.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.2",
+    "@types/yazl": "^3.3.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
