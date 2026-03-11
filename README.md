@@ -33,6 +33,12 @@ npm install
 npm link
 ```
 
+Skill install:
+
+```bash
+npx -y skills add -g danielgwilson/fathom-cli --skill fathom
+```
+
 Requirements:
 
 - Node.js 22+

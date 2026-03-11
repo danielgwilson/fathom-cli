@@ -18,13 +18,13 @@ Default stance:
 
 - Sanity check: `fathom doctor --json`
 - Browse recent meetings: `fathom meetings list --limit 25 --json`
-- Narrow by metadata: `fathom meetings list --team Operations --created-after 2026-03-01 --query "legion" --json`
+- Narrow by metadata: `fathom meetings list --team Operations --created-after 2026-03-01 --query "customer discovery" --json`
 - Resolve one meeting: `fathom meetings get <recording_id_or_url> --with summary,transcript --json`
 - Pull exact transcript or summary: `fathom recordings transcript <recording_id> --json` and `fathom recordings summary <recording_id> --json`
 
 ## Common tasks
 
-- Search meeting content: `fathom meetings grep "productivity-based RVU model" --limit 50 --json`
+- Search meeting content: `fathom meetings grep "renewal timeline" --limit 50 --json`
 - Export a bundle: `fathom meetings export --all --zip`
 - Export a filtered slice: `fathom meetings export --team Operations --created-after 2026-03-01 --format json,md,txt --json`
 - Inspect teams: `fathom teams --json`
@@ -50,4 +50,3 @@ Avoid pasting full keys into logs or chat.
 ## Contract
 
 Stable JSON behavior is documented in `docs/CONTRACT_V1.md`.
-

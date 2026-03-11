@@ -1,6 +1,6 @@
 {
   "name": "fathom-video-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Agent-first CLI + skill for Fathom's official API",
   "license": "MIT",
   "author": "Daniel G Wilson",

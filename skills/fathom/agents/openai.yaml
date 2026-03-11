@@ -1,0 +1,8 @@
+interface:
+  display_name: "Fathom"
+  short_description: "List, search, and export Fathom meetings via the official API."
+  default_prompt: "Use $fathom to inspect meetings, fetch transcripts and summaries, and export filtered results."
+
+policy:
+  allow_implicit_invocation: true
+
