@@ -30,3 +30,11 @@ Important details:
 - package name is still available
 - npm organization or personal account ownership is decided
 
+## Bootstrap note
+
+`0.1.0` was bootstrapped with a manual npm publish so the package page would exist for Trusted Publisher setup.
+
+That means:
+
+- do not push a `v0.1.0` tag after enabling trusted publishing
+- the first tag-based automated publish should be the next unreleased version, e.g. `v0.1.1`
