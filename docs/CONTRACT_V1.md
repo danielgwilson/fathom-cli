@@ -33,7 +33,7 @@ Failure:
   "ok": false,
   "error": {
     "code": "AUTH_MISSING",
-    "message": "No API key. Run `fathom auth set --stdin`.",
+    "message": "No API key. Run `fathom auth set` to save one locally, `fathom auth set --stdin` to pipe one in, or export `FATHOM_API_KEY`.",
     "retryable": false,
     "http": { "status": 401 }
   },

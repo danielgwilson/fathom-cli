@@ -36,7 +36,8 @@ Default stance:
 If `fathom doctor --json` reports missing auth:
 
 - Best ephemeral path: `FATHOM_API_KEY=... fathom doctor --json`
-- Saved local config: `printf '%s' "$FATHOM_API_KEY" | fathom auth set --stdin`
+- Saved local config: `fathom auth set`
+- Non-interactive automation: `printf '%s' "$FATHOM_API_KEY" | fathom auth set --stdin`
 
 Avoid pasting full keys into logs or chat.
 

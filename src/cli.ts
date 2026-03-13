@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createRequire } from "node:module";
+import { createInterface } from "node:readline/promises";
 import { Command } from "commander";
 import { clearConfig, readConfig, redactApiKey, resolveApiKey } from "./config.js";
 import { saveAndValidateApiKey, validateApiKey } from "./auth.js";
@@ -35,6 +36,9 @@ type IncludeFlags = {
   action_items: boolean;
   crm_matches: boolean;
 };
+
+const AUTH_HELP_TEXT =
+  "No API key. Run `fathom auth set` to save one locally, `fathom auth set --stdin` to pipe one in, or export `FATHOM_API_KEY`.";
 
 function getCliVersion(): string {
   try {
@@ -150,13 +154,27 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+async function promptForApiKey(): Promise<string> {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stderr,
+    terminal: true,
+  });
+  try {
+    process.stderr.write(`Saving to ~/.config/fathom/config.json\n`);
+    return (await rl.question("Fathom API key: ")).trim();
+  } finally {
+    rl.close();
+  }
+}
+
 async function requireApiKey({ json }: CommonJsonOptions): Promise<string> {
   const apiKey = await resolveApiKey();
   if (apiKey) return apiKey;
 
-  const error = makeError(null, { code: "AUTH_MISSING", message: "No API key. Run `fathom auth set --stdin`." });
+  const error = makeError(null, { code: "AUTH_MISSING", message: AUTH_HELP_TEXT });
   if (json) printJson(fail(error));
-  else process.stderr.write("No API key. Use `fathom auth set --stdin` or export `FATHOM_API_KEY`.\n");
+  else process.stderr.write(`${AUTH_HELP_TEXT}\n`);
   process.exitCode = 2;
   return "";
 }
@@ -272,8 +290,8 @@ program
         const env = process.env.FATHOM_API_KEY?.trim();
         const apiKey = env || config?.apiKey || "";
         if (!apiKey) {
-          if (opts.json) printJson(fail(makeError(null, { code: "AUTH_MISSING", message: "No API key set" }), { hasApiKey: false }));
-          else process.stderr.write("No API key set. Use `fathom auth set --stdin` or export `FATHOM_API_KEY`.\n");
+          if (opts.json) printJson(fail(makeError(null, { code: "AUTH_MISSING", message: AUTH_HELP_TEXT }), { hasApiKey: false }));
+          else process.stderr.write(`${AUTH_HELP_TEXT}\n`);
           process.exitCode = 2;
           return;
         }
@@ -296,8 +314,8 @@ program
         const apiKey = await resolveApiKey();
         const source = env ? "env:FATHOM_API_KEY" : config?.apiKey ? "config" : null;
         if (!apiKey) {
-          if (opts.json) printJson(fail(makeError(null, { code: "AUTH_MISSING", message: "No API key set" }), { hasApiKey: false, source }));
-          else process.stderr.write("No API key set. Run `fathom auth set --stdin`.\n");
+          if (opts.json) printJson(fail(makeError(null, { code: "AUTH_MISSING", message: AUTH_HELP_TEXT }), { hasApiKey: false, source }));
+          else process.stderr.write(`${AUTH_HELP_TEXT}\n`);
           process.exitCode = 2;
           return;
         }
@@ -317,22 +335,14 @@ program
   )
   .addCommand(
     new Command("set")
-      .description("Save an API key from stdin")
+      .description("Save an API key locally (interactive by default; stdin for automation)")
       .option("--stdin", "Read the API key from stdin")
       .option("--json", "Print JSON")
       .action(async (opts: { stdin?: boolean; json?: boolean }) => {
         const shouldReadStdin = !!opts.stdin || !process.stdin.isTTY;
-        if (!shouldReadStdin) {
-          const error = makeError(null, { code: "VALIDATION", message: "Use `--stdin` or pipe the API key in." });
-          if (opts.json) printJson(fail(error));
-          else process.stderr.write(`${error.message}\n`);
-          process.exitCode = 2;
-          return;
-        }
-
-        const raw = (await readStdin()).trim();
+        const raw = shouldReadStdin ? (await readStdin()).trim() : await promptForApiKey();
         if (!raw) {
-          const error = makeError(null, { code: "VALIDATION", message: "No API key received on stdin" });
+          const error = makeError(null, { code: "VALIDATION", message: "No API key provided" });
           if (opts.json) printJson(fail(error));
           else process.stderr.write(`${error.message}\n`);
           process.exitCode = 2;

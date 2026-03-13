@@ -57,8 +57,14 @@ fathom auth status --json
 Store locally for repeated use:
 
 ```bash
-printf '%s' "$FATHOM_API_KEY" | fathom auth set --stdin
+fathom auth set
 fathom auth status --json
+```
+
+Non-interactive / agent automation:
+
+```bash
+printf '%s' "$FATHOM_API_KEY" | fathom auth set --stdin
 ```
 
 The saved config lives at `~/.config/fathom/config.json` with `0600` permissions.
