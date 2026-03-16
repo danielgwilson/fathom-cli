@@ -25,6 +25,12 @@ Global:
 npm i -g fathom-video-cli
 ```
 
+One-shot:
+
+```bash
+npx -y fathom-video-cli doctor --json
+```
+
 Local:
 
 ```bash
@@ -87,6 +93,14 @@ fathom recordings transcript 123456789 --json
 fathom recordings summary 123456789 --json
 ```
 
+Public share URL workflow:
+
+```bash
+fathom meetings get 'https://fathom.video/share/...' --with transcript --json
+```
+
+That path can work even without an API key, because the CLI resolves public share links through Fathom's public share page.
+
 Search/filter workflow:
 
 ```bash
@@ -116,6 +130,8 @@ fathom webhooks create \
 ## Design notes
 
 - `meetings get` is a derived helper. Fathom does not publish a single-meeting fetch endpoint.
+- Public share URLs are resolved through Fathom's public share page, even when no API key is configured.
+- Share-url resolution may not expose an official `recording_id` or summary payload. In those cases the CLI returns `source: "public_share_page"` and `official_recording_id: null`.
 - `meetings grep` is also derived. It uses the official meetings list with transcript/summary enrichment when needed.
 - There is no official `whoami` endpoint, so this CLI does not pretend there is one.
 - `recordings transcript` and `recordings summary` support Fathom’s async callback mode via `--destination-url`.

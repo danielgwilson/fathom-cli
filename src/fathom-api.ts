@@ -97,6 +97,31 @@ export type Meeting = {
   crm_matches?: CRMMatches;
 };
 
+export type SharedMeeting = {
+  source: "public_share_page";
+  title: string;
+  meeting_title: string | null;
+  official_recording_id: number | null;
+  share_call_id: number;
+  url: string;
+  share_url: string;
+  created_at: string;
+  scheduled_start_time: string;
+  scheduled_end_time: string;
+  recording_start_time: string;
+  recording_end_time: string;
+  transcript_language: string;
+  transcript?: TranscriptItem[] | null;
+  default_summary?: MeetingSummary | null;
+  action_items?: ActionItem[] | null;
+  calendar_invitees: Invitee[];
+  recorded_by: FathomUser;
+  crm_matches?: CRMMatches;
+  share_access: string | null;
+};
+
+export type ResolvedMeeting = Meeting | SharedMeeting;
+
 export type Team = {
   name: string;
   created_at: string;
@@ -223,6 +248,171 @@ function parseResponseBody(contentType: string | null, text: string): unknown {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function stripTags(value: string): string {
+  return decodeHtmlEntities(value.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "")).replace(/\s+\n/g, "\n").trim();
+}
+
+function computeEndTime(startedAt: string, durationSeconds: number): string {
+  const started = new Date(startedAt);
+  return new Date(started.getTime() + durationSeconds * 1000).toISOString();
+}
+
+type SharedPagePayload = {
+  props?: {
+    head?: { title?: string | null };
+    call?: {
+      id?: number;
+      byline?: string | null;
+      duration_minutes?: number | null;
+      host?: {
+        email?: string | null;
+        company?: {
+          domain?: string | null;
+        } | null;
+      } | null;
+      recording?: {
+        started_at?: string | null;
+      } | null;
+      started_at?: string | null;
+      title?: string | null;
+      topic?: string | null;
+    } | null;
+    access?: string | null;
+    duration?: number | null;
+    copyTranscriptUrl?: string | null;
+  } | null;
+};
+
+export function isFathomShareUrl(identifier: string): boolean {
+  try {
+    const url = new URL(identifier);
+    return url.hostname === "fathom.video" && /^\/share\/[^/]+$/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function parseSharedPagePayload(htmlText: string): SharedPagePayload {
+  const match = htmlText.match(/data-page="([^"]+)"/);
+  if (!match) {
+    throw new FathomApiError("Fathom share page payload not found");
+  }
+  const encoded = match[1];
+  if (!encoded) {
+    throw new FathomApiError("Fathom share page payload is empty");
+  }
+  return JSON.parse(decodeHtmlEntities(encoded)) as SharedPagePayload;
+}
+
+export function parseSharedTranscriptHtml(payloadHtml: string): TranscriptItem[] {
+  const pattern = /<p>\s*<a[^>]*>@?([^<]+)<\/a>\s*-\s*<b>(.*?)<\/b>\s*<\/p>\s*<p[^>]*>(.*?)<\/p>/gis;
+  const items: TranscriptItem[] = [];
+
+  for (const match of payloadHtml.matchAll(pattern)) {
+    const timestamp = stripTags(match[1] || "");
+    const speaker = stripTags(match[2] || "");
+    const text = stripTags(match[3] || "");
+    if (!timestamp || !speaker || !text) continue;
+    items.push({
+      speaker: { display_name: speaker },
+      text,
+      timestamp,
+    });
+  }
+
+  return items;
+}
+
+export async function resolveSharedMeetingFromPublicPage(
+  shareUrl: string,
+  options: { includeTranscript?: boolean; userAgent?: string } = {},
+): Promise<SharedMeeting> {
+  const shareResponse = await fetch(shareUrl, {
+    headers: {
+      Accept: "text/html",
+      "User-Agent": options.userAgent || "fathom-video-cli/0.0.0",
+    },
+    signal: AbortSignal.timeout(20000),
+  });
+
+  if (!shareResponse.ok) {
+    throw new FathomApiError(`Fathom share page request failed with status ${shareResponse.status}`, { status: shareResponse.status });
+  }
+
+  const page = parseSharedPagePayload(await shareResponse.text());
+  const call = page.props?.call;
+  if (!call?.id || !call.started_at) {
+    throw new FathomApiError("Fathom share page is missing call metadata");
+  }
+
+  const durationSeconds = Math.max(
+    0,
+    Number.isFinite(page.props?.duration) ? Number(page.props?.duration) : Number(call.duration_minutes || 0) * 60,
+  );
+  const recordingStart = call.recording?.started_at || call.started_at;
+  const recordingEnd = computeEndTime(recordingStart, durationSeconds);
+  const scheduledEnd = computeEndTime(call.started_at, durationSeconds);
+  const hostEmail = call.host?.email || "";
+  const hostDomain = call.host?.company?.domain || (hostEmail.includes("@") ? hostEmail.split("@")[1] || "" : "");
+  const byline = (call.byline || "").trim();
+
+  let transcript: TranscriptItem[] | null = null;
+  if (options.includeTranscript && page.props?.copyTranscriptUrl) {
+    const transcriptResponse = await fetch(page.props.copyTranscriptUrl, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": options.userAgent || "fathom-video-cli/0.0.0",
+      },
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!transcriptResponse.ok) {
+      throw new FathomApiError(`Fathom shared transcript request failed with status ${transcriptResponse.status}`, {
+        status: transcriptResponse.status,
+      });
+    }
+    const transcriptBody = (await transcriptResponse.json()) as { html?: string | null };
+    transcript = transcriptBody.html ? parseSharedTranscriptHtml(transcriptBody.html) : [];
+  }
+
+  return {
+    source: "public_share_page",
+    title: call.title || page.props?.head?.title || "Shared Fathom meeting",
+    meeting_title: call.topic || call.title || null,
+    official_recording_id: null,
+    share_call_id: call.id,
+    url: `https://fathom.video/calls/${call.id}`,
+    share_url: shareUrl,
+    created_at: call.started_at,
+    scheduled_start_time: call.started_at,
+    scheduled_end_time: scheduledEnd,
+    recording_start_time: recordingStart,
+    recording_end_time: recordingEnd,
+    transcript_language: "unknown",
+    transcript,
+    default_summary: null,
+    action_items: null,
+    calendar_invitees: [],
+    recorded_by: {
+      name: byline && byline.toLowerCase() !== "unknown" ? byline : hostEmail || "Unknown",
+      email: hostEmail,
+      email_domain: hostDomain,
+      team: null,
+    },
+    crm_matches: null,
+    share_access: page.props?.access || null,
+  };
 }
 
 export class FathomApiClient {
@@ -361,4 +551,3 @@ export async function collectCursorPages<TPage extends { items: TItem[]; next_cu
 
   return { items, nextCursor, pages, scanned };
 }
-

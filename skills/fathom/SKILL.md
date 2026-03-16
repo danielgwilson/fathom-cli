@@ -13,6 +13,7 @@ Default stance:
 - Prefer `--json` for machine use.
 - Prefer filtering before exporting.
 - Use `meetings grep` when you need content search across summaries/transcripts.
+- If `fathom` is missing from `PATH`, install the published CLI with `npm i -g fathom-video-cli`, or prefix one-shot commands with `npx -y fathom-video-cli`.
 
 ## Default workflow
 
@@ -20,6 +21,7 @@ Default stance:
 - Browse recent meetings: `fathom meetings list --limit 25 --json`
 - Narrow by metadata: `fathom meetings list --team Operations --created-after 2026-03-01 --query "customer discovery" --json`
 - Resolve one meeting: `fathom meetings get <recording_id_or_url> --with summary,transcript --json`
+- Resolve a public share link: `fathom meetings get 'https://fathom.video/share/...' --with transcript --json`
 - Pull exact transcript or summary: `fathom recordings transcript <recording_id> --json` and `fathom recordings summary <recording_id> --json`
 
 ## Common tasks
@@ -36,18 +38,36 @@ Default stance:
 If `fathom doctor --json` reports missing auth:
 
 - Best ephemeral path: `FATHOM_API_KEY=... fathom doctor --json`
+- If `fathom` is not installed globally: `FATHOM_API_KEY=... npx -y fathom-video-cli doctor --json`
 - Saved local config: `fathom auth set`
 - Non-interactive automation: `printf '%s' "$FATHOM_API_KEY" | fathom auth set --stdin`
 
 Avoid pasting full keys into logs or chat.
 
+Public share URLs are the exception: `fathom meetings get <share_url> --with transcript --json` can resolve through Fathom's public share page even when no API key is configured.
+
 ## Important constraints
 
 - There is no official `whoami` endpoint.
 - `meetings get` is a derived helper, because Fathom does not publish a single-meeting fetch endpoint.
+- `meetings get` may resolve a public share URL through the public share page instead of the official API. In that case the result can include `source: "public_share_page"` and `official_recording_id: null`.
 - `recordings transcript` and `recordings summary` switch into callback mode when `--destination-url` is supplied.
 - Webhook secrets only appear on creation. Capture them immediately if you need signature verification.
 
-## Contract
+## Contract essentials
 
-Stable JSON behavior is documented in `docs/CONTRACT_V1.md`.
+- Prefer `--json` for agent work.
+- With `--json`, stdout should contain exactly one JSON object.
+- Progress and status belong on stderr.
+- Exit codes:
+  - `0` success
+  - `1` request failure, upstream failure, or failed checks
+  - `2` auth/user action required or invalid input
+- Common error codes:
+  - `AUTH_MISSING`
+  - `NOT_FOUND`
+  - `RATE_LIMITED`
+  - `UPSTREAM_5XX`
+  - `TIMEOUT`
+  - `VALIDATION`
+  - `CHECK_FAILED`

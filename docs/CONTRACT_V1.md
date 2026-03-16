@@ -189,6 +189,8 @@ Notes:
 
 - `<identifier>` can be a numeric `recording_id`, a call URL, or a share URL.
 - This is a derived helper because the official API does not publish `GET /meetings/{id}`.
+- Public share URLs are resolved through Fathom's public share page instead of the official API list surface.
+- Public share-url results may return `source: "public_share_page"`, `official_recording_id: null`, and transcript-only coverage when summary data is not exposed publicly.
 
 ### `fathom meetings grep <query> --json`
 

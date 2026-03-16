@@ -8,10 +8,12 @@ import {
   collectCursorPages,
   FathomApiClient,
   FathomApiError,
+  isFathomShareUrl,
   type CalendarInviteesDomainsType,
   type CreateWebhookInput,
   type Meeting,
   type MeetingsListOptions,
+  resolveSharedMeetingFromPublicPage,
   type Team,
   type TeamMember,
   type TriggeredFor,
@@ -525,23 +527,32 @@ meetingsCommand
   .option("--with <items>", "Include transcript,summary,action_items,crm_matches")
   .option("--json", "Print JSON")
   .action(async (identifier: string, opts: any) => {
-    const apiKey = await requireApiKey(opts);
-    if (!apiKey) return;
-    const client = createClient(apiKey);
     const includes = parseIncludes(opts.with, { summary: true });
-    const meeting = await findMeetingByIdentifier(client, identifier, {
-      ...buildMeetingsListOptions({
-        createdAfter: opts.createdAfter,
-        createdBefore: opts.createdBefore,
-        domains: opts.domain,
-        domainsType: opts.domainsType,
-        includes,
-        pageSize: opts.pageSize,
-        recordedBy: opts.recordedBy,
-        teams: opts.team,
-      }),
-      scanLimit: opts.scanLimit,
-    });
+    let meeting: Meeting | Awaited<ReturnType<typeof resolveSharedMeetingFromPublicPage>> | null = null;
+
+    if (isFathomShareUrl(identifier)) {
+      meeting = await resolveSharedMeetingFromPublicPage(identifier, {
+        includeTranscript: includes.transcript,
+        userAgent: `fathom-video-cli/${getCliVersion()}`,
+      });
+    } else {
+      const apiKey = await requireApiKey(opts);
+      if (!apiKey) return;
+      const client = createClient(apiKey);
+      meeting = await findMeetingByIdentifier(client, identifier, {
+        ...buildMeetingsListOptions({
+          createdAfter: opts.createdAfter,
+          createdBefore: opts.createdBefore,
+          domains: opts.domain,
+          domainsType: opts.domainsType,
+          includes,
+          pageSize: opts.pageSize,
+          recordedBy: opts.recordedBy,
+          teams: opts.team,
+        }),
+        scanLimit: opts.scanLimit,
+      });
+    }
 
     if (!meeting) {
       const error = makeError(null, { code: "NOT_FOUND", message: "Meeting not found" });

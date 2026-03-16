@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { ActionItem, Meeting, MeetingSummary, TranscriptItem } from "./fathom-api.js";
+import type { ActionItem, Meeting, MeetingSummary, SharedMeeting, TranscriptItem } from "./fathom-api.js";
 
 export type SearchSource = "metadata" | "summary" | "transcript" | "action_item";
 
@@ -124,20 +124,37 @@ export function renderMeetingMarkdown(meeting: Meeting): string {
   return sections.filter(Boolean).join("\n\n").trim();
 }
 
-export function renderMeetingText(meeting: Meeting): string {
+export function renderMeetingText(meeting: Meeting | SharedMeeting): string {
   const sections: string[] = [];
   sections.push(meeting.title);
-  sections.push([
-    `Recording ID: ${meeting.recording_id}`,
-    `Meeting Title: ${meeting.meeting_title || ""}`,
-    `URL: ${meeting.url}`,
-    `Share URL: ${meeting.share_url}`,
-    `Created At: ${meeting.created_at}`,
-    `Scheduled: ${meeting.scheduled_start_time} -> ${meeting.scheduled_end_time}`,
-    `Recording: ${meeting.recording_start_time} -> ${meeting.recording_end_time}`,
-    `Recorded By: ${meeting.recorded_by.name} <${meeting.recorded_by.email}>`,
-    `Team: ${meeting.recorded_by.team || ""}`,
-  ].join("\n"));
+  if ("share_call_id" in meeting) {
+    sections.push([
+      `Source: public share page`,
+      `Official Recording ID: unavailable`,
+      `Share Call ID: ${meeting.share_call_id}`,
+      `Meeting Title: ${meeting.meeting_title || ""}`,
+      `URL: ${meeting.url}`,
+      `Share URL: ${meeting.share_url}`,
+      `Access: ${meeting.share_access || ""}`,
+      `Created At: ${meeting.created_at}`,
+      `Scheduled: ${meeting.scheduled_start_time} -> ${meeting.scheduled_end_time}`,
+      `Recording: ${meeting.recording_start_time} -> ${meeting.recording_end_time}`,
+      `Recorded By: ${meeting.recorded_by.name} <${meeting.recorded_by.email}>`,
+      `Team: ${meeting.recorded_by.team || ""}`,
+    ].join("\n"));
+  } else {
+    sections.push([
+      `Recording ID: ${meeting.recording_id}`,
+      `Meeting Title: ${meeting.meeting_title || ""}`,
+      `URL: ${meeting.url}`,
+      `Share URL: ${meeting.share_url}`,
+      `Created At: ${meeting.created_at}`,
+      `Scheduled: ${meeting.scheduled_start_time} -> ${meeting.scheduled_end_time}`,
+      `Recording: ${meeting.recording_start_time} -> ${meeting.recording_end_time}`,
+      `Recorded By: ${meeting.recorded_by.name} <${meeting.recorded_by.email}>`,
+      `Team: ${meeting.recorded_by.team || ""}`,
+    ].join("\n"));
+  }
 
   const summaryText = summaryToText(meeting.default_summary);
   if (summaryText) {
@@ -257,4 +274,3 @@ export function searchMeeting(meeting: Meeting, query: string): SearchMatch[] {
 
   return matches;
 }
-
