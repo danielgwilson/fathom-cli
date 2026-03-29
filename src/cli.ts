@@ -2,7 +2,7 @@
 import { createRequire } from "node:module";
 import { createInterface } from "node:readline/promises";
 import { Command } from "commander";
-import { clearConfig, readConfig, redactApiKey, resolveApiKey } from "./config.js";
+import { clearConfig, ConfigError, getConfigPaths, readStoredConfig, redactApiKey, resolveApiKey } from "./config.js";
 import { saveAndValidateApiKey, validateApiKey } from "./auth.js";
 import {
   collectCursorPages,
@@ -163,16 +163,56 @@ async function promptForApiKey(): Promise<string> {
     terminal: true,
   });
   try {
-    process.stderr.write(`Saving to ~/.config/fathom/config.json\n`);
+    process.stderr.write(`Saving encrypted auth to ~/.config/fathom/config.enc\n`);
     return (await rl.question("Fathom API key: ")).trim();
   } finally {
     rl.close();
   }
 }
 
+async function resolveAuthState(): Promise<{
+  apiKey: string | null;
+  source: "env:FATHOM_API_KEY" | "config:encrypted" | null;
+  storage: "env" | "encrypted" | "none";
+  migratedFromLegacy: boolean;
+}> {
+  const env = process.env.FATHOM_API_KEY?.trim();
+  if (env) {
+    return {
+      apiKey: env,
+      source: "env:FATHOM_API_KEY",
+      storage: "env",
+      migratedFromLegacy: false,
+    };
+  }
+
+  const state = await readStoredConfig();
+  return {
+    apiKey: state.config?.apiKey?.trim() || null,
+    source: state.config?.apiKey ? "config:encrypted" : null,
+    storage: state.storage,
+    migratedFromLegacy: state.migratedFromLegacy,
+  };
+}
+
+function emitAuthResolutionError(error: unknown, { json }: CommonJsonOptions): string {
+  const cliError =
+    error instanceof ConfigError
+      ? makeError(error, { code: error.code, message: error.message })
+      : makeError(error, { code: "AUTH_INVALID", message: "Saved auth is unreadable. Run `fathom auth clear` and `fathom auth set` again." });
+  if (json) printJson(fail(cliError));
+  else process.stderr.write(`${cliError.message}\n`);
+  process.exitCode = 2;
+  return "";
+}
+
 async function requireApiKey({ json }: CommonJsonOptions): Promise<string> {
-  const apiKey = await resolveApiKey();
-  if (apiKey) return apiKey;
+  try {
+    const apiKey = await resolveApiKey();
+    if (apiKey) return apiKey;
+  } catch (error) {
+    return emitAuthResolutionError(error, { json });
+  }
 
   const error = makeError(null, { code: "AUTH_MISSING", message: AUTH_HELP_TEXT });
   if (json) printJson(fail(error));
@@ -288,22 +328,34 @@ program
       .description("Show API key source (redacted)")
       .option("--json", "Print JSON")
       .action(async (opts: CommonJsonOptions) => {
-        const config = await readConfig();
-        const env = process.env.FATHOM_API_KEY?.trim();
-        const apiKey = env || config?.apiKey || "";
+        let state;
+        try {
+          state = await resolveAuthState();
+        } catch (error) {
+          emitAuthResolutionError(error, opts);
+          return;
+        }
+        const apiKey = state.apiKey || "";
         if (!apiKey) {
-          if (opts.json) printJson(fail(makeError(null, { code: "AUTH_MISSING", message: AUTH_HELP_TEXT }), { hasApiKey: false }));
+          if (opts.json) printJson(fail(makeError(null, { code: "AUTH_MISSING", message: AUTH_HELP_TEXT }), { hasApiKey: false, source: null, storage: "none" }));
           else process.stderr.write(`${AUTH_HELP_TEXT}\n`);
           process.exitCode = 2;
           return;
         }
-        const source = env ? "env:FATHOM_API_KEY" : "config";
         if (opts.json) {
-          printJson(ok({ hasApiKey: true, source, apiKeyRedacted: redactApiKey(apiKey) }));
+          printJson(
+            ok({
+              hasApiKey: true,
+              source: state.source,
+              storage: state.storage,
+              apiKeyRedacted: redactApiKey(apiKey),
+              migratedFromLegacy: state.migratedFromLegacy,
+            }),
+          );
           return;
         }
         // eslint-disable-next-line no-console
-        console.log(`${source}: ${redactApiKey(apiKey)}`);
+        console.log(`${state.source}: ${redactApiKey(apiKey)}`);
       }),
   )
   .addCommand(
@@ -311,12 +363,24 @@ program
       .description("Validate the configured API key")
       .option("--json", "Print JSON")
       .action(async (opts: CommonJsonOptions) => {
-        const env = process.env.FATHOM_API_KEY?.trim();
-        const config = await readConfig();
-        const apiKey = await resolveApiKey();
-        const source = env ? "env:FATHOM_API_KEY" : config?.apiKey ? "config" : null;
+        let state;
+        try {
+          state = await resolveAuthState();
+        } catch (error) {
+          emitAuthResolutionError(error, opts);
+          return;
+        }
+        const apiKey = state.apiKey;
         if (!apiKey) {
-          if (opts.json) printJson(fail(makeError(null, { code: "AUTH_MISSING", message: AUTH_HELP_TEXT }), { hasApiKey: false, source }));
+          if (opts.json) {
+            printJson(
+              fail(makeError(null, { code: "AUTH_MISSING", message: AUTH_HELP_TEXT }), {
+                hasApiKey: false,
+                source: state.source,
+                storage: state.storage,
+              }),
+            );
+          }
           else process.stderr.write(`${AUTH_HELP_TEXT}\n`);
           process.exitCode = 2;
           return;
@@ -324,11 +388,20 @@ program
 
         const validation = await validateApiKey(apiKey);
         if (opts.json) {
-          printJson(ok({ hasApiKey: true, source, apiKeyRedacted: redactApiKey(apiKey), validation }));
+          printJson(
+            ok({
+              hasApiKey: true,
+              source: state.source,
+              storage: state.storage,
+              apiKeyRedacted: redactApiKey(apiKey),
+              validation,
+              migratedFromLegacy: state.migratedFromLegacy,
+            }),
+          );
           if (!validation.ok) process.exitCode = 1;
         } else if (validation.ok) {
           // eslint-disable-next-line no-console
-          console.log(`API key valid (${source || "unknown source"})`);
+          console.log(`API key valid (${state.source || "unknown source"})`);
         } else {
           process.stderr.write(`API key invalid: ${validation.reason}\n`);
           process.exitCode = 1;
@@ -353,11 +426,11 @@ program
 
         const result = await saveAndValidateApiKey(raw);
         if (opts.json) {
-          printJson(ok({ saved: true, apiKeyRedacted: redactApiKey(result.apiKey), validation: result.validation }));
+          printJson(ok({ saved: true, storage: "encrypted", apiKeyRedacted: redactApiKey(result.apiKey), validation: result.validation }));
           if (!result.validation.ok) process.exitCode = 1;
           return;
         }
-        process.stderr.write(`Saved Fathom API key (${redactApiKey(result.apiKey)}) to ~/.config/fathom/config.json.\n`);
+        process.stderr.write(`Saved encrypted Fathom API key (${redactApiKey(result.apiKey)}) to ~/.config/fathom/config.enc.\n`);
         if (!result.validation.ok) process.exitCode = 1;
       }),
   )
@@ -366,9 +439,10 @@ program
       .description("Clear the saved API key from local config")
       .option("--json", "Print JSON")
       .action(async (opts: CommonJsonOptions) => {
+        const { encryptedConfigPath, encryptionKeyPath, legacyConfigPath } = getConfigPaths();
         await clearConfig();
         if (opts.json) {
-          printJson(ok({ cleared: true }));
+          printJson(ok({ cleared: true, removed: { encryptedConfigPath, encryptionKeyPath, legacyConfigPath } }));
           return;
         }
         // eslint-disable-next-line no-console

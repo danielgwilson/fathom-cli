@@ -42,7 +42,7 @@ If `fathom doctor --json` reports missing auth:
 - Saved local config: `fathom auth set`
 - Non-interactive automation: `printf '%s' "$FATHOM_API_KEY" | fathom auth set --stdin`
 
-Avoid pasting full keys into logs or chat.
+Avoid pasting full keys into logs or chat. Prefer ephemeral `FATHOM_API_KEY` for the safest automation path. If you use `fathom auth set`, the CLI stores encrypted auth at `~/.config/fathom/config.enc` and keeps local key material in `~/.config/fathom/.encryption_key`.
 
 Public share URLs are the exception: `fathom meetings get <share_url> --with transcript --json` can resolve through Fathom's public share page even when no API key is configured.
 

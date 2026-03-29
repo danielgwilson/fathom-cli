@@ -73,7 +73,18 @@ Non-interactive / agent automation:
 printf '%s' "$FATHOM_API_KEY" | fathom auth set --stdin
 ```
 
-The saved config lives at `~/.config/fathom/config.json` with `0600` permissions.
+Saved auth is encrypted at rest:
+
+- encrypted payload: `~/.config/fathom/config.enc`
+- local encryption key: `~/.config/fathom/.encryption_key`
+
+Permissions are kept strict:
+
+- config dir: `0700`
+- encrypted auth file: `0600`
+- encryption key file: `0600`
+
+`FATHOM_API_KEY` remains the highest-priority auth source and is still the safest option for ephemeral agent use.
 
 Tip: if you keep the key in a local `.env`, Node 22+ can load it without adding any CLI dependency:
 

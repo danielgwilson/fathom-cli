@@ -89,11 +89,14 @@ Derived agent helpers built on top of the official API:
   "data": {
     "hasApiKey": true,
     "source": "env:FATHOM_API_KEY",
+    "storage": "env",
     "apiKeyRedacted": "PbXI…_WTw",
     "validation": { "ok": true }
   }
 }
 ```
+
+Saved local auth reports `source: "config:encrypted"` and `storage: "encrypted"`.
 
 ### `fathom doctor --json`
 
