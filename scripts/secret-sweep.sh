@@ -39,8 +39,8 @@ secret_hits="$(
     --glob '!**/.env' \
     --glob '!**/.env.*' \
     --glob '!**/*.min.*' \
-    --glob '!scripts/secret-sweep.sh' \
-    --glob '!scripts/public-surface-check.mjs' \
+    --glob '!**/scripts/secret-sweep.sh' \
+    --glob '!**/scripts/public-surface-check.mjs' \
     "$secret_pattern" \
     "$root" 2>/dev/null || true
 )"
